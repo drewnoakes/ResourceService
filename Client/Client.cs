@@ -3,11 +3,11 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using System.Diagnostics;
 
-var itemById = new Dictionary<ItemId, ItemSnapshot>();
+var resourceById = new Dictionary<ResourceId, ResourceSnapshot>();
 
 using CancellationTokenSource cts = new();
 
-Task task = WatchItemsAsync("https://localhost:7143", cts.Token);
+Task task = WatchResourcesAsync("https://localhost:7143", cts.Token);
 
 Console.ReadKey();
 
@@ -15,7 +15,7 @@ cts.Cancel();
 
 await task;
 
-async Task WatchItemsAsync(string address, CancellationToken cancellationToken)
+async Task WatchResourcesAsync(string address, CancellationToken cancellationToken)
 {
     GrpcChannel channel = GrpcChannel.ForAddress(address);
     DashboardService.DashboardServiceClient client = new(channel);
@@ -70,7 +70,7 @@ async Task WatchItemsAsync(string address, CancellationToken cancellationToken)
         {
             Console.WriteLine("Starting watch");
 
-            var call = client.WatchItems(new WatchItemsRequest { IsReconnect = false }, cancellationToken: cancellationToken);
+            var call = client.WatchResources(new WatchResourcesRequest { IsReconnect = false }, cancellationToken: cancellationToken);
 
             await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken))
             {
@@ -82,37 +82,37 @@ async Task WatchItemsAsync(string address, CancellationToken cancellationToken)
                 // The most reliable way to check that a streaming call succeeded is to successfully read a response.
                 if (errorCount > 0)
                 {
-                    itemById.Clear();
+                    resourceById.Clear();
                     errorCount = 0;
                 }
 
-                if (response.KindCase == WatchItemsUpdate.KindOneofCase.Heartbeat)
+                if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Heartbeat)
                 {
                     // Integrate heartbeat.
                     timeout = TimeSpan.FromMilliseconds(response.Heartbeat.IntervalMilliseconds * 5);
                 }
-                else if (response.KindCase == WatchItemsUpdate.KindOneofCase.InitialSnapshot)
+                else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialSnapshot)
                 {
                     // Copy initial snapshot into model.
-                    foreach (var item in response.InitialSnapshot.Items)
+                    foreach (var resource in response.InitialSnapshot.Resources)
                     {
-                        itemById[item.ItemId] = item;
+                        resourceById[resource.ResourceId] = resource;
                     }
                 }
-                else if (response.KindCase == WatchItemsUpdate.KindOneofCase.Changes)
+                else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
                 {
                     // Apply changes to the model.
                     foreach (var change in response.Changes.Value)
                     {
-                        if (change.KindCase == WatchItemsChange.KindOneofCase.Upsert)
+                        if (change.KindCase == WatchResourcesChange.KindOneofCase.Upsert)
                         {
                             // Upsert (i.e. add or replace)
-                            itemById[change.Upsert.ItemId] = change.Upsert;
+                            resourceById[change.Upsert.ResourceId] = change.Upsert;
                         }
-                        else if (change.KindCase ==WatchItemsChange.KindOneofCase.Delete)
+                        else if (change.KindCase == WatchResourcesChange.KindOneofCase.Delete)
                         {
                             // Remove
-                            itemById.Remove(change.Delete.ItemId);
+                            resourceById.Remove(change.Delete.ResourceId);
                         }
                     }
                 }
@@ -121,17 +121,17 @@ async Task WatchItemsAsync(string address, CancellationToken cancellationToken)
                     throw new FormatException("Unsupported response kind: " + response.KindCase);
                 }
 
-                Console.WriteLine($"Current item count: {itemById.Count}");
+                Console.WriteLine($"Current resource count: {resourceById.Count}");
             }
         }
         catch (RpcException ex)
         {
             errorCount++;
-            Console.WriteLine($"Error {errorCount} watching items: {ex.Message}");
+            Console.WriteLine($"Error {errorCount} watching resources: {ex.Message}");
         }
     }
 
-    Console.WriteLine("Stopping item watch");
+    Console.WriteLine("Stopping resource watch");
 
     channel.Dispose();
 }

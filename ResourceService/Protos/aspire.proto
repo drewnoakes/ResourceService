@@ -21,41 +21,41 @@ message ApplicationInformationResponse {
 
 ////////////////////////////////////////////
 
-message ItemCommandRequest {
-	string item_name = 1;
+message ResourceCommandRequest {
+	string resource_name = 1;
 	string type_name = 2;
 	optional string confirmation_message = 5;
 }
 
-enum ItemCommandResponseKind {
+enum ResourceCommandResponseKind {
 	none = 0;
 	succeeded = 1;
 	failed = 2;
 	cancelled = 3;
 }
 
-message ItemCommandResponse {
-	ItemCommandResponseKind kind = 1;
+message ResourceCommandResponse {
+	ResourceCommandResponseKind kind = 1;
 	optional string error_message = 2;
 }
 
 ////////////////////////////////////////////
 
-message ItemType {
-	// Unique name for the item type. Not for display.
+message ResourceType {
+	// Unique name for the resource type. Not for display.
 	string unique_name = 1;
 
-	// Localised name for the item type, for display use only.
+	// Localised name for the resource type, for display use only.
 	optional string display_name = 2;
 
-	// Any commands that may be executed against items of this type, avoiding
-	// the need to copy the value to every Item instance.
+	// Any commands that may be executed against resources of this type, avoiding
+	// the need to copy the value to every Resource instance.
 	//
-	// Note that these commands must apply to matching items at any time.
+	// Note that these commands must apply to matching resources at any time.
 	//
 	// If the set of commands changes over time, use the "commands" property
-	// of the Item itself.
-	repeated ItemCommandRequest commands = 3;
+	// of the Resource itself.
+	repeated ResourceCommandRequest commands = 3;
 }
 
 ////////////////////////////////////////////
@@ -90,22 +90,22 @@ message AdditionalData {
 	}
 }
 
-message ItemId {
+message ResourceId {
 	string uid = 1;
-	// TODO do we need item_type to make unique names? if not, inline ItemId type as string.
-	string item_type = 2;
+	// TODO do we need resource_type to make unique names? if not, inline ResourceId type as string.
+	string resource_type = 2;
 }
 
-// Models the full state of an item (container, executable, project, etc) at a particular point in time.
-message ItemSnapshot {
-	ItemId item_id = 1;
+// Models the full state of an resource (container, executable, project, etc) at a particular point in time.
+message ResourceSnapshot {
+	ResourceId resource_id = 1;
 	string display_name = 2;
 	optional string state = 3;
 	optional google.protobuf.Timestamp created_at = 4;
 	repeated EnvironmentVariable environment = 5;
 	optional int32 expected_endpoints_count = 6;
 	repeated Endpoint endpoints = 7;
-	repeated ItemCommandRequest commands = 8;
+	repeated ResourceCommandRequest commands = 8;
 
 	// List of additional data, as name/value pairs.
 	// For:
@@ -117,27 +117,27 @@ message ItemSnapshot {
 
 ////////////////////////////////////////////
 
-// Models a snapshot of item state
-message WatchItemsSnapshot {
-	repeated ItemSnapshot items = 1;
-	repeated ItemType types = 2;
+// Models a snapshot of resource state
+message WatchResourcesSnapshot {
+	repeated ResourceSnapshot resources = 1;
+	repeated ResourceType types = 2;
 }
 
 ////////////////////////////////////////////
 
-message ItemDeletion {
-	ItemId item_id = 1;
+message ResourceDeletion {
+	ResourceId resource_id = 1;
 }
 
-message WatchItemsChange  {
+message WatchResourcesChange  {
 	oneof kind {
-		ItemDeletion delete = 1;
-		ItemSnapshot upsert = 2;
+		ResourceDeletion delete = 1;
+		ResourceSnapshot upsert = 2;
 	}
 }
 
-message WatchItemsChanges {
-	repeated WatchItemsChange value = 1;
+message WatchResourcesChanges {
+	repeated WatchResourcesChange value = 1;
 }
 
 ////////////////////////////////////////////
@@ -151,19 +151,19 @@ message Heartbeat {
 
 ////////////////////////////////////////////
 
-// Initiates a subscription for data about items.
-message WatchItemsRequest {
+// Initiates a subscription for data about resources.
+message WatchResourcesRequest {
 	// True if the client is establishing this connection because a prior one closed unexpectedly.
 	optional bool is_reconnect = 1;
 }
 
-// A message received from the server when watching items. Has multiple types of payload.
-message WatchItemsUpdate {
+// A message received from the server when watching resources. Has multiple types of payload.
+message WatchResourcesUpdate {
 	oneof kind {
-		// Snapshot of current item state. Received once upon connection, before any "changes".
-		WatchItemsSnapshot initial_snapshot = 1;
+		// Snapshot of current resource state. Received once upon connection, before any "changes".
+		WatchResourcesSnapshot initial_snapshot = 1;
 		// One or more deltas to apply.
-		WatchItemsChanges changes = 2;
+		WatchResourcesChanges changes = 2;
 		// A sign of life from the server. Can arrive at any time.
 		Heartbeat heartbeat = 3;
 	}
@@ -173,6 +173,6 @@ message WatchItemsUpdate {
 
 service DashboardService {
 	rpc GetApplicationInformation(ApplicationInformationRequest) returns (ApplicationInformationResponse);
-	rpc WatchItems(WatchItemsRequest) returns (stream WatchItemsUpdate);
-	rpc ExecuteItemCommand(ItemCommandRequest) returns (ItemCommandResponse);
+	rpc WatchResources(WatchResourcesRequest) returns (stream WatchResourcesUpdate);
+	rpc ExecuteResourceCommand(ResourceCommandRequest) returns (ResourceCommandResponse);
 }

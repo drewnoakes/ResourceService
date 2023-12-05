@@ -7,29 +7,29 @@ namespace ResourceService.Services;
 
 public class DashboardService : Aspire.V1.DashboardService.DashboardServiceBase
 {
-    public override async Task WatchItems(
-        WatchItemsRequest request,
-        IServerStreamWriter<WatchItemsUpdate> responseStream,
+    public override async Task WatchResources(
+        WatchResourcesRequest request,
+        IServerStreamWriter<WatchResourcesUpdate> responseStream,
         ServerCallContext context)
     {
-        var channel = Channel.CreateUnbounded<WatchItemsUpdate>();
+        var channel = Channel.CreateUnbounded<WatchResourcesUpdate>();
 
         // Send data
         _ = Task.Run(async () =>
         {
             // Initial snapshot
-            var initialSnapshot = new WatchItemsUpdate
+            var initialSnapshot = new WatchResourcesUpdate
             {
-                InitialSnapshot = new WatchItemsSnapshot
+                InitialSnapshot = new WatchResourcesSnapshot
                 {
-                    Items =
+                    Resources =
                     {
-                        CreateRandomItemSnapshot("One"),
-                        CreateRandomItemSnapshot("Two")
+                        CreateRandomResourceSnapshot("One"),
+                        CreateRandomResourceSnapshot("Two")
                     },
                     Types_ =
                     {
-                        new ItemType { UniqueName = "test", DisplayName = "Test", Commands = { } }
+                        new ResourceType { UniqueName = "test", DisplayName = "Test", Commands = { } }
                     }
                 }
             };
@@ -40,7 +40,7 @@ public class DashboardService : Aspire.V1.DashboardService.DashboardServiceBase
             while (true)
             {
                 await Task.Delay(3000);
-                await channel.Writer.WriteAsync(new WatchItemsUpdate { Changes = new WatchItemsChanges { Value = { new WatchItemsChange { Upsert = CreateRandomItemSnapshot("One") } } } });
+                await channel.Writer.WriteAsync(new WatchResourcesUpdate { Changes = new WatchResourcesChanges { Value = { new WatchResourcesChange { Upsert = CreateRandomResourceSnapshot("One") } } } });
             }
         });
 
@@ -52,7 +52,7 @@ public class DashboardService : Aspire.V1.DashboardService.DashboardServiceBase
             while (true)
             {
                 await Task.Delay(HeartbeatIntervalMillis);
-                await channel.Writer.WriteAsync(new WatchItemsUpdate { Heartbeat = new Heartbeat { IntervalMilliseconds = HeartbeatIntervalMillis } });
+                await channel.Writer.WriteAsync(new WatchResourcesUpdate { Heartbeat = new Heartbeat { IntervalMilliseconds = HeartbeatIntervalMillis } });
             }
         });
 
@@ -62,14 +62,14 @@ public class DashboardService : Aspire.V1.DashboardService.DashboardServiceBase
         }
     }
 
-    private static ItemSnapshot CreateRandomItemSnapshot(string id)
+    private static ResourceSnapshot CreateRandomResourceSnapshot(string id)
     {
         return new()
         {
-            ItemId = new()
+            ResourceId = new()
             {
                 Uid = id,
-                ItemType = "test"
+                ResourceType = "test"
             },
             DisplayName = id,
             State = "Running",
