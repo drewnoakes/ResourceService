@@ -1,33 +1,178 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
 syntax = "proto3";
 
 package aspire.v1;
 
-// If optional doesn't work then we need to use wrappers for nullable
+// TODO get optional -> nullable mapping working during C# codegen
 
 import "google/protobuf/timestamp.proto";
 
-message WatchResourcesRequest {
+////////////////////////////////////////////
+
+message ApplicationInformationRequest {
 }
 
-message WatchResourcesSnapshot {
-	repeated Resource items = 1;
+message ApplicationInformationResponse {
+	string application_name = 1;
+	string application_version = 2;
 }
 
-message WatchResourcesChange  {
-	Resource resource = 1;
+////////////////////////////////////////////
+
+message ItemCommandRequest {
+	string item_name = 1;
+	string type_name = 2;
+	optional string confirmation_message = 5;
 }
 
-message Resource {
+enum ItemCommandResponseKind {
+	none = 0;
+	succeeded = 1;
+	failed = 2;
+	cancelled = 3;
+}
+
+message ItemCommandResponse {
+	ItemCommandResponseKind kind = 1;
+	optional string error_message = 2;
+}
+
+////////////////////////////////////////////
+
+message ItemType {
+	// Unique name for the item type. Not for display.
+	string unique_name = 1;
+
+	// Localised name for the item type, for display use only.
+	optional string display_name = 2;
+
+	// Any commands that may be executed against items of this type, avoiding
+	// the need to copy the value to every Item instance.
+	//
+	// Note that these commands must apply to matching items at any time.
+	//
+	// If the set of commands changes over time, use the "commands" property
+	// of the Item itself.
+	repeated ItemCommandRequest commands = 3;
+}
+
+////////////////////////////////////////////
+
+message EnvironmentVariable {
 	string name = 1;
+	optional string value = 2;
+	bool is_value_masked = 3;
+	bool is_from_spec = 4;
 }
 
-message WatchResourcesResponse {
-	oneof payload {
-		WatchResourcesSnapshot initial_snapshot = 1;
-		WatchResourcesChange change = 2;
+message Endpoint {
+	string name = 1;
+	optional string allocated_address = 2;
+	optional int32 allocated_port = 3;
+	optional string http_address = 4;
+}
+
+message StringArray {
+	repeated string values = 1;
+}
+
+message AdditionalData {
+	// TODO do we need separate display value(s)?
+	string name = 1;
+	// Optional namespace, e.g. "container", "executable", "project", ...
+	optional string namespace = 2;
+	// A single value will be most common. Also support lists, to avoid escaping.
+	oneof kind {
+		string value = 3;
+		StringArray values = 4;
 	}
 }
 
+message ItemId {
+	string uid = 1;
+	// TODO do we need item_type to make unique names? if not, inline ItemId type as string.
+	string item_type = 2;
+}
+
+// Models the full state of an item (container, executable, project, etc) at a particular point in time.
+message ItemSnapshot {
+	ItemId item_id = 1;
+	string display_name = 2;
+	optional string state = 3;
+	optional google.protobuf.Timestamp created_at = 4;
+	repeated EnvironmentVariable environment = 5;
+	optional int32 expected_endpoints_count = 6;
+	repeated Endpoint endpoints = 7;
+	repeated ItemCommandRequest commands = 8;
+
+	// List of additional data, as name/value pairs.
+	// For:
+	// - Containers: image, container_id, ports
+	// - Executables: process_id, executable_path, working_directory, arguments
+	// - Projects: process_id, project_path
+	repeated AdditionalData additional_data = 9;
+}
+
+////////////////////////////////////////////
+
+// Models a snapshot of item state
+message WatchItemsSnapshot {
+	repeated ItemSnapshot items = 1;
+	repeated ItemType types = 2;
+}
+
+////////////////////////////////////////////
+
+message ItemDeletion {
+	ItemId item_id = 1;
+}
+
+message WatchItemsChange  {
+	oneof kind {
+		ItemDeletion delete = 1;
+		ItemSnapshot upsert = 2;
+	}
+}
+
+message WatchItemsChanges {
+	repeated WatchItemsChange value = 1;
+}
+
+////////////////////////////////////////////
+
+// Sent periodically from the server to prevent proxies closing the connection due to inactivity,
+// and to allow the client to detect when the connection drops, notify the user and attempt to reconnect.
+message Heartbeat {
+	// Time until the next heartbeat.
+	int32 interval_milliseconds = 1;
+}
+
+////////////////////////////////////////////
+
+// Initiates a subscription for data about items.
+message WatchItemsRequest {
+	// True if the client is establishing this connection because a prior one closed unexpectedly.
+	optional bool is_reconnect = 1;
+}
+
+// A message received from the server when watching items. Has multiple types of payload.
+message WatchItemsUpdate {
+	oneof kind {
+		// Snapshot of current item state. Received once upon connection, before any "changes".
+		WatchItemsSnapshot initial_snapshot = 1;
+		// One or more deltas to apply.
+		WatchItemsChanges changes = 2;
+		// A sign of life from the server. Can arrive at any time.
+		Heartbeat heartbeat = 3;
+	}
+}
+
+////////////////////////////////////////////
+
 service DashboardService {
-	rpc WatchResources(WatchResourcesRequest) returns (stream WatchResourcesResponse);
+	rpc GetApplicationInformation(ApplicationInformationRequest) returns (ApplicationInformationResponse);
+	rpc WatchItems(WatchItemsRequest) returns (stream WatchItemsUpdate);
+	rpc ExecuteItemCommand(ItemCommandRequest) returns (ItemCommandResponse);
 }
