@@ -1,7 +1,6 @@
 ﻿using Aspire.V1;
 using Grpc.Core;
 using Grpc.Net.Client;
-using System.Diagnostics;
 
 var resourceById = new Dictionary<ResourceId, ResourceSnapshot>();
 
@@ -17,30 +16,31 @@ await task;
 
 async Task WatchResourcesAsync(string address, CancellationToken cancellationToken)
 {
-    GrpcChannel channel = GrpcChannel.ForAddress(address);
-    DashboardService.DashboardServiceClient client = new(channel);
+    var (channel, client) = CreateChannel(address);
+
+    static (GrpcChannel, DashboardService.DashboardServiceClient) CreateChannel(string address)
+    {
+        var httpHandler = new SocketsHttpHandler
+        {
+            EnableMultipleHttp2Connections = true,
+            KeepAlivePingDelay = TimeSpan.FromSeconds(20),
+            KeepAlivePingTimeout = TimeSpan.FromSeconds(10),
+            KeepAlivePingPolicy = HttpKeepAlivePingPolicy.WithActiveRequests,
+            PooledConnectionIdleTimeout = TimeSpan.FromHours(2)
+        };
+
+        var channel = GrpcChannel.ForAddress(
+            address,
+            channelOptions: new() { HttpHandler = httpHandler });
+
+        DashboardService.DashboardServiceClient client = new(channel);
+
+        return (channel, client);
+    }
 
     var errorCount = 0;
-    
-    // We set an initial timeout and adjust it based on received heartbeats.
-    var timeout = TimeSpan.FromSeconds(15);
-    var timer = Stopwatch.StartNew();
 
-    _ = Task.Run(
-        async () =>
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                if (timer.Elapsed > timeout)
-                {
-                    Console.WriteLine("TIMEOUT!!!");
-                    timer.Reset();
-                }
-
-                await Task.Delay(1000);
-            }
-        },
-        cancellationToken);
+    await channel.ConnectAsync(cancellationToken);
 
     while (!cancellationToken.IsCancellationRequested)
     {
@@ -50,16 +50,11 @@ async Task WatchResourcesAsync(string address, CancellationToken cancellationTok
 
             channel.Dispose();
 
-            channel = GrpcChannel.ForAddress(address);
-            client = new(channel);
-            timer.Restart();
+            (channel, client) = CreateChannel(address);
         }
 
         if (errorCount > 0)
         {
-            // We are in an error state. No need for timeout tracking now.
-            timer.Reset();
-
             // Exponential backoff (2^(n-1)) up to a maximum.
             TimeSpan delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, errorCount - 1), 15));
 
@@ -76,9 +71,6 @@ async Task WatchResourcesAsync(string address, CancellationToken cancellationTok
             {
                 Console.WriteLine($"Response type: {response.KindCase}");
 
-                // Any message causes us to restart the timeout timer.
-                timer.Restart();
-
                 // The most reliable way to check that a streaming call succeeded is to successfully read a response.
                 if (errorCount > 0)
                 {
@@ -86,12 +78,7 @@ async Task WatchResourcesAsync(string address, CancellationToken cancellationTok
                     errorCount = 0;
                 }
 
-                if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Heartbeat)
-                {
-                    // Integrate heartbeat.
-                    timeout = TimeSpan.FromMilliseconds(response.Heartbeat.IntervalMilliseconds * 5);
-                }
-                else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialSnapshot)
+                if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialSnapshot)
                 {
                     // Copy initial snapshot into model.
                     foreach (var resource in response.InitialSnapshot.Resources)

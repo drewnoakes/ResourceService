@@ -22,9 +22,10 @@ message ApplicationInformationResponse {
 ////////////////////////////////////////////
 
 message ResourceCommandRequest {
-	string resource_name = 1;
-	string type_name = 2;
-	optional string confirmation_message = 5;
+	string command_type = 1;
+	string resource_name = 2;
+	string resource_type = 3;
+	optional string confirmation_message = 4;
 }
 
 enum ResourceCommandResponseKind {
@@ -63,8 +64,7 @@ message ResourceType {
 message EnvironmentVariable {
 	string name = 1;
 	optional string value = 2;
-	bool is_value_masked = 3;
-	bool is_from_spec = 4;
+	bool is_from_spec = 3;
 }
 
 message Endpoint {
@@ -107,6 +107,8 @@ message ResourceSnapshot {
 	repeated Endpoint endpoints = 7;
 	repeated ResourceCommandRequest commands = 8;
 
+	// TODO potentially remove endpoints/env vars/anything that might not be general purpose
+
 	// List of additional data, as name/value pairs.
 	// For:
 	// - Containers: image, container_id, ports
@@ -142,15 +144,6 @@ message WatchResourcesChanges {
 
 ////////////////////////////////////////////
 
-// Sent periodically from the server to prevent proxies closing the connection due to inactivity,
-// and to allow the client to detect when the connection drops, notify the user and attempt to reconnect.
-message Heartbeat {
-	// Time until the next heartbeat.
-	int32 interval_milliseconds = 1;
-}
-
-////////////////////////////////////////////
-
 // Initiates a subscription for data about resources.
 message WatchResourcesRequest {
 	// True if the client is establishing this connection because a prior one closed unexpectedly.
@@ -164,8 +157,6 @@ message WatchResourcesUpdate {
 		WatchResourcesSnapshot initial_snapshot = 1;
 		// One or more deltas to apply.
 		WatchResourcesChanges changes = 2;
-		// A sign of life from the server. Can arrive at any time.
-		Heartbeat heartbeat = 3;
 	}
 }
 

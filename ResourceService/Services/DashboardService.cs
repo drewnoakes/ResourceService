@@ -7,6 +7,24 @@ namespace ResourceService.Services;
 
 public class DashboardService : Aspire.V1.DashboardService.DashboardServiceBase
 {
+    public override Task<ResourceCommandResponse> ExecuteResourceCommand(
+        ResourceCommandRequest request,
+        ServerCallContext context)
+    {
+        // TODO implement command handling
+        Console.WriteLine($"Command \"{request.CommandType}\" requested for resource \"{request.ResourceName}\" ({request.ResourceType})");
+
+        return Task.FromResult(new ResourceCommandResponse { Kind = ResourceCommandResponseKind.Succeeded });
+    }
+
+    public override Task<ApplicationInformationResponse> GetApplicationInformation(
+        ApplicationInformationRequest request,
+        ServerCallContext context)
+    {
+        // TODO obtain correct details
+        return Task.FromResult(new ApplicationInformationResponse { ApplicationName = "Aspire.Hosting", ApplicationVersion = "1.2.3" });
+    }
+
     public override async Task WatchResources(
         WatchResourcesRequest request,
         IServerStreamWriter<WatchResourcesUpdate> responseStream,
@@ -44,18 +62,6 @@ public class DashboardService : Aspire.V1.DashboardService.DashboardServiceBase
             }
         });
 
-        // Send heartbeats
-        _ = Task.Run(async () =>
-        {
-            const int HeartbeatIntervalMillis = 5_000;
-
-            while (true)
-            {
-                await Task.Delay(HeartbeatIntervalMillis);
-                await channel.Writer.WriteAsync(new WatchResourcesUpdate { Heartbeat = new Heartbeat { IntervalMilliseconds = HeartbeatIntervalMillis } });
-            }
-        });
-
         await foreach (var update in channel.Reader.ReadAllAsync(context.CancellationToken))
         {
             await responseStream.WriteAsync(update, context.CancellationToken);
@@ -64,6 +70,7 @@ public class DashboardService : Aspire.V1.DashboardService.DashboardServiceBase
 
     private static ResourceSnapshot CreateRandomResourceSnapshot(string id)
     {
+        // Construct dummy data
         return new()
         {
             ResourceId = new()
